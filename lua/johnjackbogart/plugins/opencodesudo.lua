@@ -3,7 +3,18 @@ return {
 	name = "opencode-sudo",
 	enabled = true,
 	config = function()
-		require("opencode").setup({})
+		require("opencode").setup({
+			preferred_completion = "nvim-cmp",
+		})
+
+		local ok_cmp, cmp = pcall(require, "cmp")
+		if ok_cmp then
+			cmp.setup.filetype("opencode", {
+				sources = {
+					{ name = "opencode_mentions" },
+				},
+			})
+		end
 
 		local opencode_insert_group = vim.api.nvim_create_augroup("opencode_insert", { clear = true })
 
