@@ -24,19 +24,126 @@ return {
 	dependencies = {
 		"hrsh7th/cmp-nvim-lsp",
 		{ "antosha417/nvim-lsp-file-operations", config = true },
-		"jose-elias-alvarez/typescript.nvim",
 	},
 	config = function()
-		-- import lspconfig plugin
-		local lspconfig = require("lspconfig")
-
 		-- import cmp-nvim-lsp plugin
 		local cmp_nvim_lsp = require("cmp_nvim_lsp")
 
 		local keymap = vim.keymap -- for conciseness
 
 		local opts = { noremap = true, silent = true }
+		local function setup_typescript_commands(bufnr)
+			local function execute_command(command, arguments)
+				vim.lsp.buf.execute_command({ command = command, arguments = arguments })
+			end
+
+			local function apply_source_action(action)
+				vim.lsp.buf.code_action({
+					context = {
+						only = { action },
+						diagnostics = vim.diagnostic.get(bufnr),
+					},
+					apply = true,
+				})
+			end
+
+			local function add_missing_imports()
+				apply_source_action("source.addMissingImports.ts")
+			end
+
+			local function fix_all()
+				apply_source_action("source.fixAll.ts")
+			end
+
+			local function organize_imports()
+				apply_source_action("source.organizeImports.ts")
+			end
+
+			local function remove_unused()
+				apply_source_action("source.removeUnused.ts")
+			end
+
+			local function rename_file()
+				local source = vim.api.nvim_buf_get_name(bufnr)
+				vim.ui.input({ prompt = "New name: ", default = source }, function(target)
+					if not target or target == "" or target == source then
+						return
+					end
+
+					execute_command("_typescript.applyRenameFile", {
+						{
+							sourceUri = vim.uri_from_fname(source),
+							targetUri = vim.uri_from_fname(target),
+						},
+					})
+
+					local rename_result = vim.fn.rename(source, target)
+					if rename_result ~= 0 then
+						vim.notify("Rename failed.", vim.log.levels.ERROR)
+						return
+					end
+
+					vim.api.nvim_buf_set_name(bufnr, target)
+					vim.api.nvim_buf_call(bufnr, function()
+						vim.cmd("silent! write")
+					end)
+				end)
+			end
+
+			vim.api.nvim_buf_create_user_command(
+				bufnr,
+				"TypescriptAddMissingImports",
+				add_missing_imports,
+				{ desc = "Add missing imports" }
+			)
+			vim.api.nvim_buf_create_user_command(
+				bufnr,
+				"TypescriptFixAll",
+				fix_all,
+				{ desc = "Fix all" }
+			)
+			vim.api.nvim_buf_create_user_command(
+				bufnr,
+				"TypescriptRenameFile",
+				rename_file,
+				{ desc = "Rename file and update imports" }
+			)
+			vim.api.nvim_buf_create_user_command(
+				bufnr,
+				"TypescriptOrganizeImports",
+				organize_imports,
+				{ desc = "Organize imports" }
+			)
+			vim.api.nvim_buf_create_user_command(
+				bufnr,
+				"TypescriptRemoveUnused",
+				remove_unused,
+				{ desc = "Remove unused imports" }
+			)
+		end
+		local function setup(server, config)
+			if vim.lsp.config then
+				if type(vim.lsp.config) == "function" then
+					vim.lsp.config(server, config)
+				else
+					vim.lsp.config[server] = vim.tbl_deep_extend("force", vim.lsp.config[server] or {}, config)
+				end
+				if vim.lsp.enable then
+					vim.lsp.enable(server)
+				end
+			else
+				require("lspconfig")[server].setup(config)
+			end
+		end
 		local on_attach = function(client, bufnr)
+			-- i did this because highlighting is not correct for types in opencodedyke.lua
+			--if client.name == "lua_ls" then
+			--client.server_capabilities.semanticTokensProvider = nil
+			--end
+			if client.server_capabilities.semanticTokensProvider then
+				vim.lsp.semantic_tokens.start(bufnr, client.id)
+			end
+
 			opts.buffer = bufnr
 
 			-- set these here so you can access buffer for opts
@@ -55,12 +162,11 @@ return {
 			opts.desc = "Restart LSP"
 			keymap.set("n", "<leader>rs", ":LspRestart<CR>", opts) -- mapping to restart lsp if necessary
 
-			-- to get rename file stuff working
-			require("typescript").setup({})
+			if client.name == "ts_ls" then
+				setup_typescript_commands(bufnr)
 
-			if client.name == "tsserver" then
 				opts.desc = "Rename file and update file imports"
-				keymap.set("n", "<leader>rf", ":TypescriptRenameFile<CR>") -- rename file and update imports
+				keymap.set("n", "<leader>rf", ":TypescriptRenameFile<CR>", opts) -- rename file and update imports
 
 				opts.desc = "Rename file and update file imports"
 				keymap.set("n", "<leader>oi", ":TypescriptOrganizeImports<CR>", opts) -- organize imports (not in youtube nvim video)
@@ -82,31 +188,31 @@ return {
 		end
 
 		-- configure html server
-		lspconfig["html"].setup({
+		setup("html", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 		})
 
 		-- configure typescript server with plugin
-		lspconfig["tsserver"].setup({
+		setup("ts_ls", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 		})
 
 		-- configure css server
-		lspconfig["cssls"].setup({
+		setup("cssls", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 		})
 
 		-- configure tailwindcss server
-		lspconfig["tailwindcss"].setup({
+		setup("tailwindcss", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 		})
 
 		-- configure svelte server
-		lspconfig["svelte"].setup({
+		setup("svelte", {
 			capabilities = capabilities,
 			on_attach = function(client)
 				on_attach(client)
@@ -123,37 +229,38 @@ return {
 		})
 
 		-- configure prisma orm server
-		lspconfig["prismals"].setup({
+		setup("prismals", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 		})
 
 		-- configure graphql language server
-		lspconfig["graphql"].setup({
+		setup("graphql", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 			filetypes = { "graphql", "gql", "svelte", "typescriptreact", "javascriptreact" },
 		})
 
 		-- configure emmet language server
-		lspconfig["emmet_ls"].setup({
+		setup("emmet_ls", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 			filetypes = { "html", "typescriptreact", "javascriptreact", "css", "sass", "scss", "less", "svelte" },
 		})
 
 		-- configure python server
-		lspconfig["pyright"].setup({
+		setup("pyright", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 		})
 
 		-- configure lua server (with special settings)
-		lspconfig["lua_ls"].setup({
+		setup("lua_ls", {
 			capabilities = capabilities,
 			on_attach = on_attach,
 			settings = { -- custom settings for lua
 				Lua = {
+					semantic = { enable = true },
 					-- make the language server recognize "vim" global
 					diagnostics = {
 						globals = { "vim" },
@@ -163,6 +270,10 @@ return {
 						library = {
 							[vim.fn.expand("$VIMRUNTIME/lua")] = true,
 							[vim.fn.stdpath("config") .. "/lua"] = true,
+							[vim.fn.stdpath("data") .. "/lazy"] = true,
+							-- running into issues when adding types to certain lua files
+							-- https://hugosum.com/blog/adding-types-to-your-neovim-configuration
+							--					[vim.fn.stdpath("$HOME/.config/nvim/lazy") .. "/lua"] = true,
 						},
 					},
 				},

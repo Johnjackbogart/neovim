@@ -29,6 +29,18 @@ keymap.set("n", "<leader>tp", ":tabp<CR>") -- previous tab
 
 -- plugins
 
+-- Open Code
+keymap.set({ "n", "x" }, "<leader>aaa", function()
+	require("opencode").ask("@this: ", { submit = true })
+end, { desc = "Ask opencode" })
+
+keymap.set({ "n", "x" }, "<leader>aai", function()
+	require("opencode").select()
+end, { desc = "Execute opencode action…" })
+keymap.set({ "n", "t" }, "<leader>aat", function()
+	require("opencode").toggle()
+end, { desc = "Toggle opencode" })
+
 -- Neo Tree
 keymap.set("n", "<leader>ee", "<cmd>Neotree<CR>") -- open tree
 keymap.set("n", "<leader>ef", "<cmd>Neotree focus<CR>") -- focus on NeoTree

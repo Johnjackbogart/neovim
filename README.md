@@ -1,6 +1,5 @@
-**welcome to my neovim config :)**
-
 most of this was done with the help of [primeagen](https://www.youtube.com/watch?v=w7i4amO_zaE) and [josean](https://www.youtube.com/watch?v=vdn_pKJUda8)
+**welcome to my neovim config :)**
 
 so it is a pretty standard set up.
 
