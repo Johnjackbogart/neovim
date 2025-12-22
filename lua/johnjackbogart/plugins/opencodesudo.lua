@@ -22,6 +22,24 @@ return {
 				end)
 			end,
 		})
+
+		vim.api.nvim_create_autocmd("VimEnter", {
+			group = opencode_insert_group,
+			once = true,
+			callback = function()
+				vim.schedule(function()
+					local ok, api = pcall(require, "opencode.api")
+					if not ok then
+						return
+					end
+					if api.open_input then
+						api.open_input()
+					elseif api.toggle then
+						api.toggle()
+					end
+				end)
+			end,
+		})
 	end,
 	dependencies = {
 		"nvim-lua/plenary.nvim",
