@@ -1,59 +1,54 @@
 return {
 	{
 		"nvim-treesitter/nvim-treesitter",
-		event = { "BufReadPre", "BufNewFile" },
+		branch = "main",
+		lazy = false,
 		build = ":TSUpdate",
 		dependencies = {
 			"nvim-treesitter/nvim-treesitter-textobjects",
 			"windwp/nvim-ts-autotag",
 		},
 		config = function()
-			-- import nvim-treesitter plugin
-			local treesitter = require("nvim-treesitter.configs")
+			require("nvim-treesitter").setup({})
 
-			-- configure treesitter
-			treesitter.setup({ -- enable syntax highlighting
-				highlight = {
-					enable = true,
-				},
-				-- enable indentation
-				indent = { enable = true },
-				-- enable autotagging (w/ nvim-ts-autotag plugin)
-				autotag = {
-					enable = true,
-				},
-				-- ensure these language parsers are installed
-				ensure_installed = {
-					"json",
-					"javascript",
-					"typescript",
-					"tsx",
-					"yaml",
-					"html",
-					"css",
-					"prisma",
-					"markdown",
-					"markdown_inline",
-					"svelte",
-					"graphql",
-					"bash",
-					"lua",
-					"luadoc",
-					"vim",
-					"dockerfile",
-					"gitignore",
-					"query",
-				},
-				incremental_selection = {
-					enable = true,
-					keymaps = {
-						init_selection = "<C-space>",
-						node_incremental = "<C-space>",
-						scope_incremental = false,
-						node_decremental = "<bs>",
-					},
-				},
+			-- ensure these language parsers are installed
+			require("nvim-treesitter").install({
+				"json",
+				"javascript",
+				"typescript",
+				"tsx",
+				"yaml",
+				"html",
+				"css",
+				"prisma",
+				"markdown",
+				"markdown_inline",
+				"svelte",
+				"graphql",
+				"bash",
+				"lua",
+				"luadoc",
+				"vim",
+				"dockerfile",
+				"gitignore",
+				"query",
 			})
+
+			-- enable syntax highlighting, folds, and indentation for any
+			-- filetype with an installed parser
+			vim.api.nvim_create_autocmd("FileType", {
+				callback = function(args)
+					if not pcall(vim.treesitter.start) then
+						return
+					end
+					vim.wo[0][0].foldexpr = "v:lua.vim.treesitter.foldexpr()"
+					vim.wo[0][0].foldmethod = "expr"
+					vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+				end,
+			})
+
+			-- enable autotagging (w/ nvim-ts-autotag plugin)
+			require("nvim-ts-autotag").setup()
 
 			-- enable nvim-ts-context-commentstring plugin for commenting tsx and jsx
 			require("ts_context_commentstring").setup({})
