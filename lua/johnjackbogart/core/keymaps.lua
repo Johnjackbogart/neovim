@@ -28,9 +28,11 @@ keymap.set("n", "<leader>tx", ":tabclose<CR>") -- close current tab
 keymap.set("n", "<leader>tn", ":tabn<CR>") -- next tab
 keymap.set("n", "<leader>tp", ":tabp<CR>") -- previous tab
 
--- plugins
+-- window navigation
+keymap.set("n", "<leader>eee", "<cmd>wincmd p<CR>", { desc = "Jump to previous active window" })
+-- Force close the current window/buffer (works inside the OpenCode terminal window)
+vim.keymap.set({ "n", "t" }, "<leader>cc", "<cmd>bd!<CR>", { desc = "Close OpenCode window" })
 
--- Open Code
 local function is_opencode_buffer(buf)
 	local filetype = vim.bo[buf].filetype
 	return filetype == "opencode"
@@ -56,13 +58,44 @@ local function is_opencode_input_buffer(buf)
 	end
 	return vim.bo[buf].modifiable and not vim.bo[buf].readonly
 end
-
 local function is_main_editor_buffer(buf)
 	if is_opencode_buffer(buf) then
 		return false
 	end
 	return vim.bo[buf].buftype == ""
 end
+
+local function find_main_editor_window()
+	local last_win = vim.g.main_editor_win
+	if last_win and vim.api.nvim_win_is_valid(last_win) then
+		local buf = vim.api.nvim_win_get_buf(last_win)
+		if is_main_editor_buffer(buf) then
+			return last_win
+		end
+	end
+
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		local buf = vim.api.nvim_win_get_buf(win)
+		if is_main_editor_buffer(buf) then
+			return win
+		end
+	end
+end
+
+local function focus_main_editor_window()
+	local target_win = find_main_editor_window()
+	if target_win then
+		vim.api.nvim_set_current_win(target_win)
+	end
+end
+
+-- above script exists so that I can jump straight to editor
+-- from any window, now just to previous window
+keymap.set({ "n" }, "<leader>ee", focus_main_editor_window)
+
+-- plugins
+
+-- Open Code
 
 local function find_opencode_window()
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -94,23 +127,6 @@ local function find_non_opencode_window()
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
 		local buf = vim.api.nvim_win_get_buf(win)
 		if not is_opencode_buffer(buf) then
-			return win
-		end
-	end
-end
-
-local function find_main_editor_window()
-	local last_win = vim.g.main_editor_win
-	if last_win and vim.api.nvim_win_is_valid(last_win) then
-		local buf = vim.api.nvim_win_get_buf(last_win)
-		if is_main_editor_buffer(buf) then
-			return last_win
-		end
-	end
-
-	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		local buf = vim.api.nvim_win_get_buf(win)
-		if is_main_editor_buffer(buf) then
 			return win
 		end
 	end
@@ -166,13 +182,6 @@ local function toggle_opencode_focus()
 	end)
 end
 
-local function focus_main_editor_window()
-	local target_win = find_main_editor_window()
-	if target_win then
-		vim.api.nvim_set_current_win(target_win)
-	end
-end
-
 vim.api.nvim_create_autocmd("WinEnter", {
 	callback = function()
 		local buf = vim.api.nvim_get_current_buf()
@@ -184,8 +193,6 @@ vim.api.nvim_create_autocmd("WinEnter", {
 		end
 	end,
 })
-
-vim.api.nvim_create_user_command("MainEditor", focus_main_editor_window, { desc = "Focus main editor window" })
 
 keymap.set({ "n", "x" }, "<leader>aaa", function()
 	require("opencode").ask("@this: ", { submit = true })
@@ -203,7 +210,7 @@ end, { desc = "Toggle opencode" })
 keymap.set({ "n", "t" }, "<leader>aaw", toggle_opencode_focus, { desc = "Toggle opencode focus" })
 
 -- Neo Tree
-keymap.set("n", "<leader>ee", "<cmd>Neotree<CR>") -- open tree
+keymap.set("n", "<leader>eo", "<cmd>Neotree<CR>") -- open tree
 keymap.set("n", "<leader>ef", "<cmd>Neotree focus<CR>") -- focus on NeoTree
 keymap.set("n", "<leader>et", "<cmd>Neotree reveal<CR>") -- toggle file explorer on current file
 keymap.set("n", "<leader>ec", "<cmd>Neotree toggle<CR>") -- collapse file explorer
@@ -244,3 +251,11 @@ keymap.set("x", "<leader>p", '"_dP')
 keymap.set("n", "<leader>y", '"+y')
 keymap.set("v", "<leader>y", '"+y')
 keymap.set("n", "<leader>Y", '"+Y')
+
+-- For a standard module file
+-- from google, reload keymaps
+vim.keymap.set("n", "<leader>rk", function()
+	package.loaded["johnjackbogart.core.keymaps"] = nil
+	require("johnjackbogart.core.keymaps")
+	print("Keymaps reloaded!")
+end, { desc = "Reload keymaps" })

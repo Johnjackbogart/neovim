@@ -32,9 +32,9 @@ return {
 		local keymap = vim.keymap -- for conciseness
 
 		local opts = { noremap = true, silent = true }
-		local function setup_typescript_commands(bufnr)
+		local function setup_typescript_commands(client, bufnr)
 			local function execute_command(command, arguments)
-				vim.lsp.buf.execute_command({ command = command, arguments = arguments })
+				client:exec_cmd({ command = command, arguments = arguments })
 			end
 
 			local function apply_source_action(action)
@@ -96,12 +96,7 @@ return {
 				add_missing_imports,
 				{ desc = "Add missing imports" }
 			)
-			vim.api.nvim_buf_create_user_command(
-				bufnr,
-				"TypescriptFixAll",
-				fix_all,
-				{ desc = "Fix all" }
-			)
+			vim.api.nvim_buf_create_user_command(bufnr, "TypescriptFixAll", fix_all, { desc = "Fix all" })
 			vim.api.nvim_buf_create_user_command(
 				bufnr,
 				"TypescriptRenameFile",
@@ -121,143 +116,92 @@ return {
 				{ desc = "Remove unused imports" }
 			)
 		end
-		local function setup(server, config)
-			if vim.lsp.config then
-				if type(vim.lsp.config) == "function" then
-					vim.lsp.config(server, config)
-				else
-					vim.lsp.config[server] = vim.tbl_deep_extend("force", vim.lsp.config[server] or {}, config)
+
+		-- Neovim 0.11+ attaches all lsp keymaps/behavior via LspAttach instead of
+		-- a per-server on_attach callback passed into lspconfig's setup()
+		vim.api.nvim_create_autocmd("LspAttach", {
+			group = vim.api.nvim_create_augroup("UserLspConfig", { clear = true }),
+			callback = function(event)
+				local client = assert(vim.lsp.get_client_by_id(event.data.client_id))
+				local bufnr = event.buf
+
+				-- i did this because highlighting is not correct for types in opencodedyke.lua
+				--if client.name == "lua_ls" then
+				--client.server_capabilities.semanticTokensProvider = nil
+				--end
+
+				opts.buffer = bufnr
+
+				-- set these here so you can access buffer for opts
+				keymap.set("n", "gf", "<cmd>Lspsaga finder<CR>", opts) -- show definition, references
+				keymap.set("n", "gD", "<Cmd>lua vim.lsp.buf.definition()<CR>", opts) -- got to definition
+				keymap.set("n", "gd", "<cmd>Lspsaga peek_definition<CR>", opts) -- see definition and make edits in window
+				keymap.set("n", "gi", "<cmd>lua vim.lsp.buf.implementation()<CR>", opts) -- go to implementation
+				keymap.set("n", "<leader>ca", "<cmd>Lspsaga code_action<CR>", opts) -- see available code actions
+				keymap.set("n", "<leader>rn", "<cmd>Lspsaga rename<CR>", opts) -- smart rename
+				keymap.set("n", "<leader>GD", "<cmd>Lspsaga show_line_diagnostics<CR>", opts) -- show  diagnostics for line
+				keymap.set("n", "<leader>Gd", "<cmd>Lspsaga show_cursor_diagnostics<CR>", opts) -- show diagnostics for cursor
+				keymap.set("n", "[d", "<cmd>Lspsaga diagnostic_jump_prev<CR>", opts) -- jump to previous diagnostic in buffer
+				keymap.set("n", "]d", "<cmd>Lspsaga diagnostic_jump_next<CR>", opts) -- jump to next diagnostic in buffer
+				keymap.set("n", "K", "<cmd>Lspsaga hover_doc<CR>", opts) -- show documentation for what is under cursor
+
+				opts.desc = "Restart LSP"
+				keymap.set("n", "<leader>rs", ":lsp restart<CR>", opts) -- mapping to restart lsp if necessary
+
+				if client.name == "ts_ls" then
+					setup_typescript_commands(client, bufnr)
+
+					opts.desc = "Rename file and update file imports"
+					keymap.set("n", "<leader>rf", ":TypescriptRenameFile<CR>", opts) -- rename file and update imports
+
+					opts.desc = "Rename file and update file imports"
+					keymap.set("n", "<leader>oi", ":TypescriptOrganizeImports<CR>", opts) -- organize imports (not in youtube nvim video)
+
+					opts.desc = "Remove unused imports"
+					keymap.set("n", "<leader>ru", ":TypescriptRemoveUnused<CR>", opts) -- remove unused variables (not in youtube nvim video)
 				end
-				if vim.lsp.enable then
-					vim.lsp.enable(server)
+
+				if client.name == "svelte" then
+					vim.api.nvim_create_autocmd("BufWritePost", {
+						pattern = { "*.js", "*.ts" },
+						callback = function(ctx)
+							client:notify("$/onDidChangeTsOrJsFile", { uri = ctx.file })
+						end,
+					})
 				end
-			else
-				require("lspconfig")[server].setup(config)
-			end
-		end
-		local on_attach = function(client, bufnr)
-			-- i did this because highlighting is not correct for types in opencodedyke.lua
-			--if client.name == "lua_ls" then
-			--client.server_capabilities.semanticTokensProvider = nil
-			--end
-			if client.server_capabilities.semanticTokensProvider then
-				vim.lsp.semantic_tokens.start(bufnr, client.id)
-			end
-
-			opts.buffer = bufnr
-
-			-- set these here so you can access buffer for opts
-			keymap.set("n", "gf", "<cmd>Lspsaga finder<CR>", opts) -- show definition, references
-			keymap.set("n", "gD", "<Cmd>lua vim.lsp.buf.definition()<CR>", opts) -- got to definition
-			keymap.set("n", "gd", "<cmd>Lspsaga peek_definition<CR>", opts) -- see definition and make edits in window
-			keymap.set("n", "gi", "<cmd>lua vim.lsp.buf.implementation()<CR>", opts) -- go to implementation
-			keymap.set("n", "<leader>ca", "<cmd>Lspsaga code_action<CR>", opts) -- see available code actions
-			keymap.set("n", "<leader>rn", "<cmd>Lspsaga rename<CR>", opts) -- smart rename
-			keymap.set("n", "<leader>D", "<cmd>Lspsaga show_line_diagnostics<CR>", opts) -- show  diagnostics for line
-			keymap.set("n", "<leader>d", "<cmd>Lspsaga show_cursor_diagnostics<CR>", opts) -- show diagnostics for cursor
-			keymap.set("n", "[d", "<cmd>Lspsaga diagnostic_jump_prev<CR>", opts) -- jump to previous diagnostic in buffer
-			keymap.set("n", "]d", "<cmd>Lspsaga diagnostic_jump_next<CR>", opts) -- jump to next diagnostic in buffer
-			keymap.set("n", "K", "<cmd>Lspsaga hover_doc<CR>", opts) -- show documentation for what is under cursor
-
-			opts.desc = "Restart LSP"
-			keymap.set("n", "<leader>rs", ":LspRestart<CR>", opts) -- mapping to restart lsp if necessary
-
-			if client.name == "ts_ls" then
-				setup_typescript_commands(bufnr)
-
-				opts.desc = "Rename file and update file imports"
-				keymap.set("n", "<leader>rf", ":TypescriptRenameFile<CR>", opts) -- rename file and update imports
-
-				opts.desc = "Rename file and update file imports"
-				keymap.set("n", "<leader>oi", ":TypescriptOrganizeImports<CR>", opts) -- organize imports (not in youtube nvim video)
-
-				opts.desc = "Remove unused imports"
-				keymap.set("n", "<leader>ru", ":TypescriptRemoveUnused<CR>", opts) -- remove unused variables (not in youtube nvim video)
-			end
-		end
-
-		-- used to enable autocompletion (assign to every lsp server config)
-		local capabilities = cmp_nvim_lsp.default_capabilities()
-
-		-- Change the Diagnostic symbols in the sign column (gutter)
-		-- (not in youtube nvim video)
-		local signs = { Error = " ", Warn = " ", Hint = "󰠠 ", Info = " " }
-		for type, icon in pairs(signs) do
-			local hl = "DiagnosticSign" .. type
-			vim.fn.sign_define(hl, { text = icon, texthl = hl, numhl = "" })
-		end
-
-		-- configure html server
-		setup("html", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-		})
-
-		-- configure typescript server with plugin
-		setup("ts_ls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-		})
-
-		-- configure css server
-		setup("cssls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-		})
-
-		-- configure tailwindcss server
-		setup("tailwindcss", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-		})
-
-		-- configure svelte server
-		setup("svelte", {
-			capabilities = capabilities,
-			on_attach = function(client)
-				on_attach(client)
-
-				vim.api.nvim_create_autocmd("BufWritePost", {
-					pattern = { "*.js", "*.ts" },
-					callback = function(ctx)
-						if client.name == "svelte" then
-							client.notify("$/onDidChangeTsOrJsFile", { uri = ctx.file })
-						end
-					end,
-				})
 			end,
 		})
 
-		-- configure prisma orm server
-		setup("prismals", {
-			capabilities = capabilities,
-			on_attach = on_attach,
+		-- Change the Diagnostic symbols in the sign column (gutter)
+		-- (not in youtube nvim video)
+		vim.diagnostic.config({
+			signs = {
+				text = {
+					[vim.diagnostic.severity.ERROR] = " ",
+					[vim.diagnostic.severity.WARN] = " ",
+					[vim.diagnostic.severity.HINT] = "󰠠 ",
+					[vim.diagnostic.severity.INFO] = " ",
+				},
+			},
+		})
+
+		-- "*" applies to every server below (used to enable autocompletion)
+		vim.lsp.config("*", {
+			capabilities = cmp_nvim_lsp.default_capabilities(),
 		})
 
 		-- configure graphql language server
-		setup("graphql", {
-			capabilities = capabilities,
-			on_attach = on_attach,
+		vim.lsp.config("graphql", {
 			filetypes = { "graphql", "gql", "svelte", "typescriptreact", "javascriptreact" },
 		})
 
 		-- configure emmet language server
-		setup("emmet_ls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
+		vim.lsp.config("emmet_ls", {
 			filetypes = { "html", "typescriptreact", "javascriptreact", "css", "sass", "scss", "less", "svelte" },
 		})
 
-		-- configure python server
-		setup("pyright", {
-			capabilities = capabilities,
-			on_attach = on_attach,
-		})
-
 		-- configure lua server (with special settings)
-		setup("lua_ls", {
-			capabilities = capabilities,
-			on_attach = on_attach,
+		vim.lsp.config("lua_ls", {
 			settings = { -- custom settings for lua
 				Lua = {
 					semantic = { enable = true },
@@ -278,6 +222,22 @@ return {
 					},
 				},
 			},
+		})
+
+		-- html, ts_ls, cssls, tailwindcss, svelte, prismals, pyright use nvim-lspconfig's
+		-- default config as-is, extended only by the "*" capabilities set above
+		vim.lsp.enable({
+			"html",
+			"ts_ls",
+			"cssls",
+			"tailwindcss",
+			"svelte",
+			"prismals",
+			"graphql",
+			"emmet_ls",
+			"pyright",
+			"lua_ls",
+			"rust_analyzer",
 		})
 	end,
 }

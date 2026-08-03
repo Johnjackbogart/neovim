@@ -34,15 +34,13 @@ return {
 				"query",
 			})
 
-			-- enable syntax highlighting, folds, and indentation for any
-			-- filetype with an installed parser
+			-- enable syntax highlighting and indentation for any filetype
+			-- with an installed parser
 			vim.api.nvim_create_autocmd("FileType", {
 				callback = function(args)
 					if not pcall(vim.treesitter.start) then
 						return
 					end
-					vim.wo[0][0].foldexpr = "v:lua.vim.treesitter.foldexpr()"
-					vim.wo[0][0].foldmethod = "expr"
 					vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
 				end,
 			})

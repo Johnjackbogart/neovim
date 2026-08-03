@@ -1,5 +1,8 @@
 local opt = vim.opt
 
+opt.timeout = true
+opt.timeoutlen = 750
+
 -- with this set, guifg, guibg, gui set colors
 opt.termguicolors = true
 
