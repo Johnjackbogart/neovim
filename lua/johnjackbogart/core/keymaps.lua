@@ -66,15 +66,23 @@ local function is_main_editor_buffer(buf)
 end
 
 local function find_main_editor_window()
+	-- only consider windows on the current tab, otherwise this jumps
+	-- to an editor window in a whole other tab
+	local current_tab = vim.api.nvim_get_current_tabpage()
+
 	local last_win = vim.g.main_editor_win
-	if last_win and vim.api.nvim_win_is_valid(last_win) then
+	if
+		last_win
+		and vim.api.nvim_win_is_valid(last_win)
+		and vim.api.nvim_win_get_tabpage(last_win) == current_tab
+	then
 		local buf = vim.api.nvim_win_get_buf(last_win)
 		if is_main_editor_buffer(buf) then
 			return last_win
 		end
 	end
 
-	for _, win in ipairs(vim.api.nvim_list_wins()) do
+	for _, win in ipairs(vim.api.nvim_tabpage_list_wins(current_tab)) do
 		local buf = vim.api.nvim_win_get_buf(win)
 		if is_main_editor_buffer(buf) then
 			return win
@@ -92,6 +100,11 @@ end
 -- above script exists so that I can jump straight to editor
 -- from any window, now just to previous window
 keymap.set({ "n" }, "<leader>ee", focus_main_editor_window)
+keymap.set({ "n" }, "<leader>we", focus_main_editor_window, { desc = "Focus text editor in current tab" })
+
+-- backs the <leader>wm mapping above, which previously pointed at a
+-- command that didn't exist anywhere
+vim.api.nvim_create_user_command("MainEditor", focus_main_editor_window, {})
 
 -- plugins
 

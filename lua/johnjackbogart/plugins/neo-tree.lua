@@ -48,9 +48,25 @@ return {
 						local tabid = vim.api.nvim_get_current_tabpage()
 						local state = manager.get_state("filesystem", tabid)
 
+						-- revealing the file pulls focus into the tree, so put it
+						-- back on the window that is showing the opened file
+						local function refocus_editor()
+							vim.schedule(function()
+								local target = vim.fn.fnamemodify(file_path, ":p")
+								for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+									local buf = vim.api.nvim_win_get_buf(win)
+									if vim.api.nvim_buf_get_name(buf) == target then
+										vim.api.nvim_set_current_win(win)
+										return
+									end
+								end
+							end)
+						end
+
 						if state.path then
 							-- this tab's tree is already set up, just make sure it's visible
 							manager.show("filesystem")
+							refocus_editor()
 							return
 						end
 
@@ -59,7 +75,7 @@ return {
 						local root = root_from_other_tab(tabid) or vim.fn.fnamemodify(file_path, ":p:h")
 
 						-- path_to_reveal expands just the folders leading to file_path
-						manager.navigate(state, root, file_path)
+						manager.navigate(state, root, file_path, refocus_editor)
 					end,
 				},
 			},
